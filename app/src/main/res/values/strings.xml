@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">OfflineMdb</string>
+    <string name="search_hint">Search for a title</string>
+</resources>
