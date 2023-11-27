@@ -1,72 +1,196 @@
+package com.rsahel.offlinemdb
+
+import android.content.ContentValues
 import android.content.Context
+import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
-import com.rsahel.offlinemdb.DatabaseItem
-import java.io.FileOutputStream
-import java.io.IOException
+import android.util.Range
 
-class DatabaseHelper(private val mContext: Context) :
-    SQLiteOpenHelper(mContext, DATABASE_NAME, null, DATABASE_VERSION) {
+class DatabaseHelper(mContext: Context) :
+    SQLiteOpenHelper(mContext, "im.db", null, DATABASE_VERSION) {
 
     init {
-        if (!checkDatabase())
-            copyDatabase()
+        instance = this
     }
 
     override fun onCreate(db: SQLiteDatabase) {
-        // No need to create tables here if you are copying a pre-populated database
         Log.d(TAG, "onCreate()")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Handle database upgrades if needed
         Log.d(TAG, "onUpgrade()")
     }
 
-    // Method to copy the database from the assets folder to the application's data directory
-    @Throws(IOException::class)
-    fun copyDatabase() {
-        val input = mContext.assets.open(DATABASE_NAME)
-        val outputPath = mContext.getDatabasePath(DATABASE_NAME)
+    fun updateDatabase(context: Context, progressCallback: ((Int) -> Unit)) {
+        val db = writableDatabase
 
-        outputPath.parentFile?.mkdirs() // Create necessary directories
-        val output = FileOutputStream(outputPath)
+        db.execSQL("DROP TABLE IF EXISTS $TABLE_NAME_NEW;")
+        db.execSQL("CREATE TABLE $TABLE_NAME_NEW ($ID_NAME TEXT PRIMARY KEY);")
 
-        input.use { inputStream ->
-            output.use { outputStream ->
-                inputStream.copyTo(outputStream)
+        val set = HashSet<String>()
+        val downloader = FileDownloader()
+        downloadAndReadTitleRatings(downloader, db, context, set, progressCallback)
+        downloadAndReadTitleBasics(downloader, db, context, set, progressCallback)
+
+        db.execSQL("DROP TABLE IF EXISTS $TABLE_NAME_CURRENT;")
+        db.execSQL("ALTER TABLE $TABLE_NAME_NEW RENAME TO $TABLE_NAME_CURRENT;")
+
+        db.close()
+
+        downloader.clearCacheFiles()
+    }
+
+    private fun downloadAndReadTitleRatings(
+        downloader: FileDownloader,
+        db: SQLiteDatabase,
+        context: Context,
+        set: HashSet<String>,
+        progressCallback: (Int) -> Unit,
+    ) {
+        fun addColumns(columnNames: List<String>) {
+            db.execSQL("ALTER TABLE $TABLE_NAME_NEW ADD COLUMN ${columnNames[1]} REAL;")
+            db.execSQL("ALTER TABLE $TABLE_NAME_NEW ADD COLUMN ${columnNames[2]} INT;")
+        }
+
+        fun isRowValid(values: List<String>): Boolean {
+            return values[2].toInt() > 5000
+        }
+
+        fun insertRow(columnNames: List<String>, values: List<String>) {
+            val contentValues = ContentValues()
+            contentValues.put(columnNames[0], values[0])
+            contentValues.put(columnNames[1], values[1].toFloat())
+            contentValues.put(columnNames[2], values[2].toInt())
+            set.add(values[0])
+            db.insert(TABLE_NAME_NEW, null, contentValues)
+        }
+
+        downloadAndProcess(
+            downloader,
+            db,
+            context,
+            "https://datasets.imdbws.com/title.ratings.tsv.gz",
+            "title.ratings.tsv.gz",
+            Range(0, 25),
+            progressCallback,
+            ::addColumns,
+            ::isRowValid,
+            ::insertRow,
+        )
+    }
+
+    private fun downloadAndReadTitleBasics(
+        downloader: FileDownloader,
+        db: SQLiteDatabase,
+        context: Context,
+        set: HashSet<String>,
+        progressCallback: (Int) -> Unit
+    ) {
+        fun isColumnAllowed(columnName: String): Boolean {
+            return (columnName != "originalTitle"
+                    && columnName != "isAdult"
+                    && columnName != "endYear"
+                    )
+        }
+
+        val columnIndices = mutableListOf<Int>()
+        fun addColumns(columnNames: List<String>) {
+            for ((i, columnName) in columnNames.withIndex()) {
+                if (i != 0 && isColumnAllowed(columnName)) {
+                    Log.d("DatabaseHelper", "Add column ${columnName}")
+                    db.execSQL("ALTER TABLE $TABLE_NAME_NEW ADD COLUMN ${columnName} TEXT;")
+                    columnIndices.add(i)
+                }
             }
         }
-    }
 
-    // Method to check if the database already exists
-    private fun checkDatabase(): Boolean {
-        var checkDB: SQLiteDatabase? = null
-        try {
-            checkDB = openDatabase()
-        } catch (e: Exception) {
-            // Database does not exist yet
-            Log.e(TAG, "checkDatabase: Database does not exist.")
+        fun isRowValid(values: List<String>): Boolean {
+            return set.contains(values[0])
         }
-        checkDB?.close()
-        return checkDB != null
+
+        fun insertRow(columnNames: List<String>, values: List<String>) {
+            val contentValues = ContentValues()
+            for (i in columnIndices) {
+                contentValues.put(columnNames[i], values[i])
+            }
+
+            val whereClause = "$ID_NAME = ?"
+            val whereArgs = arrayOf(values[0])
+            db.update(TABLE_NAME_NEW, contentValues, whereClause, whereArgs)
+        }
+
+        downloadAndProcess(
+            downloader,
+            db,
+            context,
+            "https://datasets.imdbws.com/title.basics.tsv.gz",
+            "title.basics.tsv.gz",
+            Range(25, 100),
+            progressCallback,
+            ::addColumns,
+            ::isRowValid,
+            ::insertRow,
+        )
     }
 
-    // Method to open the database
-    private fun openDatabase(): SQLiteDatabase {
-        val databaseFile = mContext.getDatabasePath(DATABASE_NAME)
-        return SQLiteDatabase.openDatabase(databaseFile.path, null, SQLiteDatabase.OPEN_READONLY)
+    private fun downloadAndProcess(
+        downloader: FileDownloader,
+        db: SQLiteDatabase,
+        context: Context,
+        urlString: String,
+        cacheFilename: String,
+        progressRange: Range<Int>,
+        progressCallback: (Int) -> Unit,
+        addColumns: (List<String>) -> Unit,
+        isRowValid: (List<String>) -> Boolean,
+        insertOrUpdateRow: (List<String>, List<String>) -> Unit,
+    ) {
+        Log.d(TAG, "Start download process for $cacheFilename")
+        val maxCounter = 30000
+        var counter = 0
+        var columnNames: List<String>? = null
+        var previousPercentage = 0
+        downloader.downloadAndReadTSVGZFile(
+            urlString,
+            cacheFilename,
+            context,
+        ) { line ->
+            val values = line.split("\t")
+            if (columnNames == null) {
+                columnNames = values
+                addColumns(columnNames!!)
+                db.beginTransaction()
+            } else if (isRowValid(values)) {
+                insertOrUpdateRow(columnNames!!, values)
+                val percentage =
+                    (progressRange.lower + (progressRange.upper - progressRange.lower) * (counter++ / maxCounter.toFloat())).toInt()
+                if (previousPercentage != percentage) {
+                    previousPercentage = percentage
+                    progressCallback(percentage)
+                }
+            }
+        }
+
+        db.setTransactionSuccessful()
+        db.endTransaction()
+        Log.d(TAG, "End download process for $cacheFilename ($counter items)")
     }
 
-    fun getRowsWithTitle(query: String): MutableList<DatabaseItem> {
+    fun getRowsWithTitle(query: String, max: Int = 50): MutableList<DatabaseItem> {
         val db = readableDatabase
+
+        val result = mutableListOf<DatabaseItem>()
+
+        if (isTableExists()) {
+            return result
+        }
 
         val selection = "$COLUMN_TITLE LIKE ?"
         val selectionArgs = arrayOf("%$query%")
-
         val cursor = db.query(
-            TABLE_NAME,
+            TABLE_NAME_CURRENT,
             null,
             selection,
             selectionArgs,
@@ -74,15 +198,11 @@ class DatabaseHelper(private val mContext: Context) :
             null,
             "numVotes DESC"
         )
-
-        val result = mutableListOf<DatabaseItem>()
-
-        // Sort the cursor based on Levenshtein distance
         cursor?.let { c ->
             if (c.moveToFirst()) {
                 do {
                     result.add(DatabaseItem(c, c.getString(c.getColumnIndexOrThrow(COLUMN_TITLE))))
-                } while (c.moveToNext())
+                } while (c.moveToNext() && result.size < max)
             }
         }
 
@@ -90,40 +210,34 @@ class DatabaseHelper(private val mContext: Context) :
         return result
     }
 
-    private fun levenshteinDistance(s1: String, s2: String): Int {
-        val len1 = s1.length + 1
-        val len2 = s2.length + 1
+    fun isTableExists(): Boolean {
+        val db = readableDatabase
+        var cursor: Cursor? = null
 
-        val cost = Array(len1) { IntArray(len2) }
-
-        for (i in 0 until len1) {
-            cost[i][0] = i
+        try {
+            cursor = db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                arrayOf(TABLE_NAME_CURRENT)
+            )
+            return cursor?.count ?: 0 > 0
+        } finally {
+            cursor?.close()
+            db.close()
         }
-
-        for (j in 0 until len2) {
-            cost[0][j] = j
-        }
-
-        for (i in 1 until len1) {
-            for (j in 1 until len2) {
-                cost[i][j] = minOf(
-                    cost[i - 1][j] + 1,
-                    cost[i][j - 1] + 1,
-                    cost[i - 1][j - 1] + if (s1[i - 1] == s2[j - 1]) 0 else 1
-                )
-            }
-        }
-
-        return cost[len1 - 1][len2 - 1]
     }
-
 
     companion object {
         private const val TAG = "DatabaseHelper"
-        private const val DATABASE_NAME = "im.db"
         private const val DATABASE_VERSION = 1
 
         private const val COLUMN_TITLE = "primaryTitle"
-        private const val TABLE_NAME = "titles"
+        private const val TABLE_NAME_CURRENT = "titles"
+        private const val TABLE_NAME_NEW = "titles_new"
+        private const val ID_NAME = "tconst"
+
+        private var instance: DatabaseHelper? = null
+        fun getInstance(): DatabaseHelper? {
+            return instance
+        }
     }
 }

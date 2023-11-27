@@ -1,6 +1,7 @@
 package com.rsahel.offlinemdb
 
 import android.database.Cursor
+import java.text.DecimalFormat
 
 enum class ItemType {
     short,
@@ -23,7 +24,7 @@ class DatabaseItem {
     val year: String;
     val genres: String;
     val runtime: String;
-    val type: ItemType
+    val type: ItemType;
 
     constructor(c: Cursor, title: String) {
         this.title = title
@@ -70,5 +71,16 @@ class DatabaseItem {
         if (type[0] == 't' && type[1] == 'v')
             return "TV ${type.substring(2)}"
         return type.replaceFirstChar(Char::titlecase)
+    }
+
+    fun formattedNumVotes(): String {
+        val df = DecimalFormat("#.##")
+        if (numVotes > 1e6) {
+            return "${df.format(numVotes / 1e6f)}M"
+        }
+        if (numVotes > 1000) {
+            return "${df.format(numVotes / 1000.0f)}k"
+        }
+        return "$numVotes"
     }
 }

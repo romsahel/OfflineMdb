@@ -3,6 +3,16 @@ package com.rsahel.offlinemdb
 object SampleData {
     val databaseSample = listOf(
         DatabaseItem(
+            id = "tt12389837",
+            title = "Pirates of the Caribbean: The Curse of the Black Pearl",
+            rating = 8.1f,
+            numVotes = 1186579,
+            year = "2003",
+            genres = "Drama",
+            runtime = "134",
+            type = ItemType.movie
+        ),
+        DatabaseItem(
             id = "tt1234567",
             title = "The Boy and the Heron",
             rating = 7.6f,

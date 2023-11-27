@@ -6,7 +6,7 @@ import sqlite3
 
 def download_and_unzip(filename):
     print(f"Downloading {filename}...")
-    # urllib.request.urlretrieve(f"https://datasets.imdbws.com/{filename}", filename)
+    urllib.request.urlretrieve(f"https://datasets.imdbws.com/{filename}", filename)
     print(f"Unzipping {filename}...")
     with gzip.open(filename) as f:
         data = pd.read_csv(f, sep="\t")
@@ -27,9 +27,9 @@ if basics[id].dtype != ratings[id].dtype:
     raise ValueError("Data type mismatch for the id column in the two DataFrames.")
 
 # Connect to the SQLite database
-db_connection = sqlite3.connect("im.db")
+db_connection = sqlite3.connect("im2.db")
 
-merged_df = pd.merge(basics, ratings, on=id)
+merged_df = basics # pd.merge(basics, ratings, on=id)
 
 # Save the merged DataFrame to the SQLite database, excluding certain columns
 columns_to_exclude = [
