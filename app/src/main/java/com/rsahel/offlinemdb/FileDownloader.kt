@@ -86,10 +86,8 @@ class FileDownloader {
             bufferedReader = BufferedReader(InputStreamReader(gzipInputStream))
 
             var line: String?
-            var counter = 0
             while (bufferedReader.readLine().also { line = it } != null) {
                 lineCallback.invoke(line!!)
-//                if (counter++ > 300000) break
             }
 
         } catch (e: Exception) {

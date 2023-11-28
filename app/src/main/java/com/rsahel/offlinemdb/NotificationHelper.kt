@@ -21,7 +21,7 @@ class RefreshNotification(val context: Context, cancelPendingIntent: PendingInte
         createChannel()
         builder = NotificationCompat.Builder(context, channelId).apply {
             setSmallIcon(R.drawable.ic_launcher_foreground)
-            setContentTitle("Refresh in progress")
+            setContentTitle(context.getString(R.string.notification_title))
             priority = NotificationCompat.PRIORITY_LOW
             setOngoing(true)
             addAction(android.R.drawable.ic_delete, "Cancel", cancelPendingIntent)
@@ -34,8 +34,7 @@ class RefreshNotification(val context: Context, cancelPendingIntent: PendingInte
             "OMDb",
             NotificationManager.IMPORTANCE_DEFAULT
         )
-        channel.description =
-            "Displayed only while refreshing so that it can work in the background"
+        channel.description = context.getString(R.string.notification_description)
 
         NotificationManagerCompat.from(context).createNotificationChannel(
             channel

@@ -1,5 +1,14 @@
 <resources>
     <string name="app_name">OMDb</string>
+    <string name="app_title">Offline Movie Database</string>
+    <string name="app_subtitle">provided by imdb.com</string>
+
+    <string name="database_lastRefresh">Last refresh: %s</string>
+    <string name="database_itemCount">%s items in database</string>
+
+    <string name="notification_title">Refresh in progress</string>
+    <string name="notification_description">Displayed only while refreshing so that it can work in the background</string>
+
     <string name="search_hint">Search for a title</string>
     <string name="refresh_action">Refresh</string>
 </resources>
