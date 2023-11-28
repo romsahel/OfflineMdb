@@ -1,13 +1,16 @@
 package com.rsahel.offlinemdb
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
-import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.Observer
 import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.WorkRequest
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import kotlinx.coroutines.CancellationException
@@ -24,28 +27,40 @@ class RefreshWorker(appContext: Context, workerParams: WorkerParameters) :
     )
 
     companion object {
-        val Tag = "Refresh"
-        val Progress = "Progress"
+        const val Tag = "Refresh"
+        const val Progress = "Progress"
+
+        fun buildAndEnqueue(context: Context) {
+            val workManager = WorkManager.getInstance(context)
+            val workRequest: WorkRequest = OneTimeWorkRequestBuilder<RefreshWorker>()
+                .addTag(Tag)
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            workManager.enqueue(workRequest)
+        }
+
+        fun observe(
+            context: Context,
+            owner: LifecycleOwner,
+            observer: (WorkInfo) -> Unit,
+        ) {
+            val workManager = WorkManager.getInstance(context)
+            workManager.pruneWork()
+            workManager
+                .getWorkInfosByTagLiveData(Tag)
+                .observe(owner) {
+                    if (it.isNotEmpty()) {
+                        observer(it.first())
+                    }
+                }
+        }
     }
 
     override suspend fun getForegroundInfo(): ForegroundInfo {
-        createChannel()
         return ForegroundInfo(
             notification.notificationId,
             notification.builder.build(),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-        )
-    }
-
-    private fun createChannel() {
-        val channel = NotificationChannel(
-            notification.channelId,
-            "MdbOffline",
-            NotificationManager.IMPORTANCE_DEFAULT
-        )
-
-        NotificationManagerCompat.from(applicationContext).createNotificationChannel(
-            channel
         )
     }
 
@@ -56,6 +71,7 @@ class RefreshWorker(appContext: Context, workerParams: WorkerParameters) :
             this@RefreshWorker.setProgress(workDataOf(Progress to progress))
         }
 
+        notification.show(0)
         try {
             withContext(Dispatchers.Default) {
                 dbHelper.updateDatabase(applicationContext) { progress ->
@@ -65,7 +81,7 @@ class RefreshWorker(appContext: Context, workerParams: WorkerParameters) :
                     }
                 }
             }
-        } catch (e: CancellationException){
+        } catch (e: CancellationException) {
             println("Work cancelled!")
         } finally {
             println("Clean up!")

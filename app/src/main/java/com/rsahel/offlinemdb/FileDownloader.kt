@@ -14,9 +14,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.zip.GZIPInputStream
 
-class FileDownloader() {
+class FileDownloader {
 
-    val cacheFiles = mutableListOf<File>()
+    private val cacheFiles = mutableListOf<File>()
 
     fun downloadAndReadTSVGZFile(
         urlString: String,

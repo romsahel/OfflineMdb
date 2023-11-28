@@ -1,7 +1,8 @@
 package com.rsahel.offlinemdb
 
 import android.Manifest
-import android.annotation.SuppressLint
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.pm.PackageManager
@@ -10,15 +11,35 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
 class RefreshNotification(val context: Context, cancelPendingIntent: PendingIntent) {
-    val channelId = "OfflineMdb"
-    val notificationId = 1
     private val maxProgress = 100
-    val builder = NotificationCompat.Builder(context, channelId).apply {
-        setSmallIcon(R.drawable.ic_launcher_background)
-        setContentTitle("Refresh in progress")
-        priority = NotificationCompat.PRIORITY_LOW
-        setOngoing(true)
-        addAction(android.R.drawable.ic_delete, "Cancel", cancelPendingIntent)
+    private val channelId = "OMDbNotificationChannel"
+
+    val notificationId = 1
+    var builder: NotificationCompat.Builder
+
+    init {
+        createChannel()
+        builder = NotificationCompat.Builder(context, channelId).apply {
+            setSmallIcon(R.drawable.ic_launcher_foreground)
+            setContentTitle("Refresh in progress")
+            priority = NotificationCompat.PRIORITY_LOW
+            setOngoing(true)
+            addAction(android.R.drawable.ic_delete, "Cancel", cancelPendingIntent)
+        }
+    }
+
+    private fun createChannel() {
+        val channel = NotificationChannel(
+            channelId,
+            "OMDb",
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
+        channel.description =
+            "Displayed only while refreshing so that it can work in the background"
+
+        NotificationManagerCompat.from(context).createNotificationChannel(
+            channel
+        )
     }
 
     fun show(progress: Int) {

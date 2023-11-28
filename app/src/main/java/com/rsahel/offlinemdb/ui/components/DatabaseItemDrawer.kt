@@ -1,4 +1,4 @@
-package com.rsahel.offlinemdb
+package com.rsahel.offlinemdb.ui.components
 
 import android.content.Context
 import android.content.Intent
@@ -34,6 +34,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.rsahel.offlinemdb.DatabaseItem
+import com.rsahel.offlinemdb.SampleData
 import com.rsahel.offlinemdb.ui.theme.OfflineMdbTheme
 
 @Composable

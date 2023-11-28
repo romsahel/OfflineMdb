@@ -2,17 +2,24 @@ package com.rsahel.offlinemdb
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Context.MODE_PRIVATE
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import android.util.Range
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
-class DatabaseHelper(mContext: Context) :
+class DatabaseHelper(mContext: Context, val onUpdated: (DatabaseHelper) -> Unit) :
     SQLiteOpenHelper(mContext, "im.db", null, DATABASE_VERSION) {
+
+    var tableExists: Boolean = false
 
     init {
         instance = this
+        updateIfTableExists()
+        onUpdated(this)
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -23,6 +30,28 @@ class DatabaseHelper(mContext: Context) :
         Log.d(TAG, "onUpgrade()")
     }
 
+    private fun setLastUpdate(context: Context) {
+        val sharedPref = context.getSharedPreferences(TAG, MODE_PRIVATE);
+
+        val current = LocalDateTime.now()
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        sharedPref.edit().putString("LastUpdate", current.format(formatter)).apply();
+    }
+
+    fun getLastUpdate(context: Context): String? {
+        val sharedPref = context.getSharedPreferences(TAG, MODE_PRIVATE);
+        return sharedPref.getString("LastUpdate", null);
+    }
+    private fun setItemCount(context: Context, itemCount: Int) {
+        val sharedPref = context.getSharedPreferences(TAG, MODE_PRIVATE);
+        sharedPref.edit().putInt("ItemCount", itemCount).apply();
+    }
+
+    fun getItemCount(context: Context): Int {
+        val sharedPref = context.getSharedPreferences(TAG, MODE_PRIVATE);
+        return sharedPref.getInt("ItemCount", 0);
+    }
+
     fun updateDatabase(context: Context, progressCallback: ((Int) -> Unit)) {
         val db = writableDatabase
 
@@ -31,7 +60,7 @@ class DatabaseHelper(mContext: Context) :
 
         val set = HashSet<String>()
         val downloader = FileDownloader()
-        downloadAndReadTitleRatings(downloader, db, context, set, progressCallback)
+        val itemCount = downloadAndReadTitleRatings(downloader, db, context, set, progressCallback)
         downloadAndReadTitleBasics(downloader, db, context, set, progressCallback)
 
         db.execSQL("DROP TABLE IF EXISTS $TABLE_NAME_CURRENT;")
@@ -40,6 +69,10 @@ class DatabaseHelper(mContext: Context) :
         db.close()
 
         downloader.clearCacheFiles()
+        setLastUpdate(context)
+        setItemCount(context, itemCount)
+        updateIfTableExists()
+        onUpdated(this)
     }
 
     private fun downloadAndReadTitleRatings(
@@ -48,14 +81,14 @@ class DatabaseHelper(mContext: Context) :
         context: Context,
         set: HashSet<String>,
         progressCallback: (Int) -> Unit,
-    ) {
+    ): Int {
         fun addColumns(columnNames: List<String>) {
             db.execSQL("ALTER TABLE $TABLE_NAME_NEW ADD COLUMN ${columnNames[1]} REAL;")
             db.execSQL("ALTER TABLE $TABLE_NAME_NEW ADD COLUMN ${columnNames[2]} INT;")
         }
 
         fun isRowValid(values: List<String>): Boolean {
-            return values[2].toInt() > 5000
+            return values[2].toInt() > 150
         }
 
         fun insertRow(columnNames: List<String>, values: List<String>) {
@@ -67,7 +100,7 @@ class DatabaseHelper(mContext: Context) :
             db.insert(TABLE_NAME_NEW, null, contentValues)
         }
 
-        downloadAndProcess(
+        return downloadAndProcess(
             downloader,
             db,
             context,
@@ -146,9 +179,9 @@ class DatabaseHelper(mContext: Context) :
         addColumns: (List<String>) -> Unit,
         isRowValid: (List<String>) -> Boolean,
         insertOrUpdateRow: (List<String>, List<String>) -> Unit,
-    ) {
+    ): Int {
         Log.d(TAG, "Start download process for $cacheFilename")
-        val maxCounter = 30000
+        val maxCounter = 300000
         var counter = 0
         var columnNames: List<String>? = null
         var previousPercentage = 0
@@ -176,14 +209,15 @@ class DatabaseHelper(mContext: Context) :
         db.setTransactionSuccessful()
         db.endTransaction()
         Log.d(TAG, "End download process for $cacheFilename ($counter items)")
+        return counter
     }
 
-    fun getRowsWithTitle(query: String, max: Int = 50): MutableList<DatabaseItem> {
+    fun getItemsWithTitle(query: String, max: Int = 50): MutableList<DatabaseItem> {
         val db = readableDatabase
 
         val result = mutableListOf<DatabaseItem>()
 
-        if (isTableExists()) {
+        if (!tableExists) {
             return result
         }
 
@@ -210,20 +244,24 @@ class DatabaseHelper(mContext: Context) :
         return result
     }
 
-    fun isTableExists(): Boolean {
+    private fun updateIfTableExists() {
         val db = readableDatabase
         var cursor: Cursor? = null
 
+        tableExists = false
         try {
             cursor = db.rawQuery(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                 arrayOf(TABLE_NAME_CURRENT)
             )
-            return (cursor?.count ?: 0) > 0
+            Log.d(TAG, "Table contains ${cursor?.count} elements")
+            tableExists = (cursor?.count ?: 0) > 0
         } finally {
             cursor?.close()
             db.close()
         }
+
+
     }
 
     companion object {
