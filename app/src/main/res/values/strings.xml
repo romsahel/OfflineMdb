@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">OfflineMdb</string>
+    <string name="app_name">OMDb</string>
     <string name="search_hint">Search for a title</string>
     <string name="refresh_action">Refresh</string>
 </resources>
