@@ -188,7 +188,7 @@ class DatabaseHelper(mContext: Context) :
         }
 
         val selection = "$COLUMN_TITLE LIKE ?"
-        val selectionArgs = arrayOf("%$query%")
+        val selectionArgs = arrayOf("%${query.trim()}%")
         val cursor = db.query(
             TABLE_NAME_CURRENT,
             null,
@@ -219,7 +219,7 @@ class DatabaseHelper(mContext: Context) :
                 "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
                 arrayOf(TABLE_NAME_CURRENT)
             )
-            return cursor?.count ?: 0 > 0
+            return (cursor?.count ?: 0) > 0
         } finally {
             cursor?.close()
             db.close()
