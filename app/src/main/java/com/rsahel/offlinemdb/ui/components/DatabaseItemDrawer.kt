@@ -120,9 +120,30 @@ private fun DrawDatabaseItemContent(
             )
         }
         Spacer(modifier = Modifier.height(4.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                text = "${item.formattedNumVotes()} votes · ${item.formattedRuntime()}",
+                color = MaterialTheme.colorScheme.secondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+            )
+            Text(
+                text = item.formattedType(),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.secondary,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "${item.formattedType()} · ${item.formattedRuntime()} · ${item.formattedNumVotes()} votes",
-            color = MaterialTheme.colorScheme.secondary,
+            text = item.formattedGenres(),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             style = MaterialTheme.typography.bodyMedium

@@ -83,4 +83,8 @@ class DatabaseItem {
         }
         return "$numVotes"
     }
+
+    fun formattedGenres(): String {
+        return genres.replace(",", " · ")
+    }
 }
