@@ -42,6 +42,7 @@ class DatabaseHelper(mContext: Context, val onUpdated: (DatabaseHelper) -> Unit)
         val sharedPref = context.getSharedPreferences(TAG, MODE_PRIVATE);
         return sharedPref.getString("LastUpdate", null);
     }
+
     private fun setItemCount(context: Context, itemCount: Int) {
         val sharedPref = context.getSharedPreferences(TAG, MODE_PRIVATE);
         sharedPref.edit().putInt("ItemCount", itemCount).apply();
@@ -122,12 +123,13 @@ class DatabaseHelper(mContext: Context, val onUpdated: (DatabaseHelper) -> Unit)
         progressCallback: (Int) -> Unit
     ) {
         fun isColumnAllowed(columnName: String): Boolean {
-            return (columnName != "originalTitle"
-                    && columnName != "isAdult"
+            return (columnName != "isAdult"
                     && columnName != "endYear"
                     )
         }
 
+        var primaryTitleIndex = -1
+        var originalTitleIndex = -1
         val columnIndices = mutableListOf<Int>()
         fun addColumns(columnNames: List<String>) {
             for ((i, columnName) in columnNames.withIndex()) {
@@ -135,6 +137,11 @@ class DatabaseHelper(mContext: Context, val onUpdated: (DatabaseHelper) -> Unit)
                     Log.d("DatabaseHelper", "Add column ${columnName}")
                     db.execSQL("ALTER TABLE $TABLE_NAME_NEW ADD COLUMN ${columnName} TEXT;")
                     columnIndices.add(i)
+                    if (columnName == COLUMN_TITLE) {
+                        primaryTitleIndex = i
+                    } else if (columnName == COLUMN_ORIGINAL_TITLE) {
+                        originalTitleIndex = i
+                    }
                 }
             }
         }
@@ -147,6 +154,9 @@ class DatabaseHelper(mContext: Context, val onUpdated: (DatabaseHelper) -> Unit)
             val contentValues = ContentValues()
             for (i in columnIndices) {
                 contentValues.put(columnNames[i], values[i])
+            }
+            if (values[primaryTitleIndex] == values[originalTitleIndex]) {
+                contentValues.remove(columnNames[originalTitleIndex])
             }
 
             val whereClause = "$ID_NAME = ?"
@@ -221,17 +231,19 @@ class DatabaseHelper(mContext: Context, val onUpdated: (DatabaseHelper) -> Unit)
             return result
         }
 
-        val selection = "$COLUMN_TITLE LIKE ?"
-        val selectionArgs = arrayOf("%${query.trim()}%")
+        val selection = "$COLUMN_TITLE LIKE ? OR $COLUMN_ORIGINAL_TITLE LIKE ?"
+        val selectionArgs = arrayOf("%$query%", "%$query%")
+        val orderBy = "numVotes DESC"
         val cursor = db.query(
-            TABLE_NAME_CURRENT,
-            null,
-            selection,
-            selectionArgs,
-            null,
-            null,
-            "numVotes DESC"
-        )
+                TABLE_NAME_CURRENT,
+                null,
+                selection,
+                selectionArgs,
+                null,
+                null,
+                orderBy
+            )
+
         cursor?.let { c ->
             if (c.moveToFirst()) {
                 do {
@@ -269,6 +281,7 @@ class DatabaseHelper(mContext: Context, val onUpdated: (DatabaseHelper) -> Unit)
         private const val DATABASE_VERSION = 1
 
         private const val COLUMN_TITLE = "primaryTitle"
+        private const val COLUMN_ORIGINAL_TITLE = "originalTitle"
         private const val TABLE_NAME_CURRENT = "titles"
         private const val TABLE_NAME_NEW = "titles_new"
         private const val ID_NAME = "tconst"
