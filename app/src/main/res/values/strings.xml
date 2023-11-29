@@ -1,7 +1,10 @@
 <resources>
     <string name="app_name">OMDb</string>
     <string name="app_title">Offline Movie Database</string>
-    <string name="app_subtitle">provided by imdb.com</string>
+    <string name="app_subtitle">Information courtesy of
+IMDb\n
+(https://www.imdb.com).\n
+Used with permission.</string>
 
     <string name="database_lastRefresh">Last refresh: %s</string>
     <string name="database_itemCount">%s items in database</string>
