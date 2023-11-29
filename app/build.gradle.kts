@@ -11,13 +11,24 @@ android {
         applicationId = "com.rsahel.offlinemdb"
         minSdk = 29
         targetSdk = 33
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+    }
+
+    applicationVariants.all {
+        val variant = this
+        variant.outputs
+            .map { it as com.android.build.gradle.internal.api.BaseVariantOutputImpl }
+            .forEach { output ->
+                val outputFileName = "OMDb.${variant.baseName}.${variant.versionName}.apk"
+                output.outputFileName = outputFileName
+            }
     }
 
     buildTypes {
